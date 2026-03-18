@@ -1,4 +1,3 @@
-# render.yaml
 services:
   # Python FastAPI Service
   - type: web
@@ -6,7 +5,7 @@ services:
     runtime: image
     repo: https://github.com/nelnel19/MediSkin-Backend
     branch: main
-    dockerfilePath: ./Dockerfile.python  # This should be at root level, not under 'docker'
+    dockerfilePath: ./Dockerfile.python
     plan: free
     region: singapore
     envVars:
@@ -26,7 +25,7 @@ services:
     runtime: image
     repo: https://github.com/nelnel19/MediSkin-Backend
     branch: main
-    dockerfilePath: ./Dockerfile.node  # This should be at root level, not under 'docker'
+    dockerfilePath: ./Dockerfile.node
     plan: free
     region: singapore
     envVars:
@@ -34,4 +33,6 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+      - key: NODE_ENV
+        value: production
     healthCheckPath: /health

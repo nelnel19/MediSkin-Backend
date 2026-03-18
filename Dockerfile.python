@@ -1,9 +1,19 @@
+# Dockerfile.python
 FROM python:3.11-slim
+
 WORKDIR /app
-# Copy ONLY Python-related files
+
+# Copy Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy ONLY Python-related files
 COPY main.py database.py ./
-COPY models/ ./models/
-# Don't copy Node.js files!
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000}
+# Copy ONLY the Keras model, not the Node.js model files
+COPY models/skin_disease_mobilenet.keras ./models/
+
+# Expose the port
+EXPOSE 10000
+
+# Start the FastAPI server
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "10000"]
