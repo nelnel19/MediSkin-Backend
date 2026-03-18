@@ -32,20 +32,20 @@ const corsOptions = {
   maxAge: 86400 // 24 hours cache for preflight requests
 };
 
-// Apply CORS middleware
+// Apply CORS middleware - this handles all OPTIONS requests automatically
 app.use(cors(corsOptions));
 
-// FIXED: Handle preflight requests with correct route syntax
-// Use '/*' instead of '*' to avoid path-to-regexp error
-app.options('/*', cors(corsOptions));
+// REMOVE THIS LINE - it's causing the error
+// app.options('/*', cors(corsOptions));
 
 // Add security headers
 app.use((req, res, next) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+  // These headers are redundant if you're using cors middleware
+  // res.setHeader('Access-Control-Allow-Origin', '*');
+  // res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
   next();
 });
 
