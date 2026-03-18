@@ -12,26 +12,50 @@ import testCloudinaryRoutes from "./routes/test-cloudinary.js";
 dotenv.config();
 const app = express();
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(cors());
+// Enhanced CORS configuration for mobile apps
+const corsOptions = {
+  origin: '*',  // Allow all origins for mobile app
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'Accept', 
+    'X-Requested-With',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: ['Content-Length', 'Content-Type', 'Authorization'],
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // 24 hours cache for preflight requests
+};
 
-// Health check endpoint for Render
-app.get("/health", (req, res) => {
-  res.status(200).json({ 
-    status: "healthy", 
-    service: "node-api",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime()
-  });
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
+
+// Add security headers
+app.use((req, res, next) => {
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+  next();
 });
 
-// Root endpoint
-app.get("/", (req, res) => {
-  res.json({ 
-    message: "Skincare Analyzer API is running!",
-    environment: process.env.NODE_ENV || "development"
-  });
+// Body parsing middleware
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Request logging middleware (optional but helpful for debugging)
+app.use((req, res, next) => {
+  console.log(`📡 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  next();
 });
 
 // Routes
@@ -42,19 +66,59 @@ app.use("/api/face", faceRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/test', testCloudinaryRoutes);
 
-// MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log("✅ MongoDB connected"))
+// Root endpoint
+app.get("/", (req, res) => {
+  res.json({ 
+    message: "Skincare Analyzer API is running!",
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "healthy", 
+    service: "node-api",
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
+// MongoDB connection with better error handling
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+})
+.then(() => {
+  console.log("✅ MongoDB connected successfully");
+})
 .catch(err => {
-  console.error("❌ MongoDB error:", err);
+  console.error("❌ MongoDB connection error:", err);
   process.exit(1); // Exit if database fails to connect
 });
 
-// Use PORT from environment (Render sets this) or fallback to 10000
-const PORT = process.env.PORT || 10000;
+// Handle MongoDB connection events
+mongoose.connection.on('error', (err) => {
+  console.error('❌ MongoDB connection error:', err);
+});
 
-// Important: Bind to 0.0.0.0 to accept external connections
+mongoose.connection.on('disconnected', () => {
+  console.log('⚠️ MongoDB disconnected');
+});
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  await mongoose.connection.close();
+  console.log('MongoDB connection closed through app termination');
+  process.exit(0);
+});
+
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Health check: http://0.0.0.0:${PORT}/health`);
+  console.log(`📱 Accepting connections from all origins`);
 });
