@@ -1,16 +1,39 @@
+# render.yaml
 services:
+  # Python FastAPI Service
   - type: web
-    name: mediskin-backend
-    runtime: python
-    plan: free  # or starter, professional, etc.
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app
+    name: mediskin-python-api
+    runtime: image
+    repo: https://github.com/nelnel19/MediSkin-Backend
+    branch: main
+    dockerfilePath: ./Dockerfile.python
+    dockerContext: .
+    plan: free  # or starter
+    region: singapore  # Closest to PH
     envVars:
       - key: MONGO_URI
-        sync: false  # You'll set this manually in Render dashboard
+        sync: false
       - key: CLOUDINARY_CLOUD_NAME
         sync: false
       - key: CLOUDINARY_API_KEY
         sync: false
       - key: CLOUDINARY_API_SECRET
         sync: false
+    healthCheckPath: /
+
+  # Node.js Service
+  - type: web
+    name: mediskin-node-api
+    runtime: image
+    repo: https://github.com/nelnel19/MediSkin-Backend
+    branch: main
+    dockerfilePath: ./Dockerfile.node
+    dockerContext: .
+    plan: free
+    region: singapore
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: JWT_SECRET  # Add any Node-specific env vars
+        sync: false
+    healthCheckPath: /health  # Adjust based on your Node routes
