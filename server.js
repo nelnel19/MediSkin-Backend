@@ -35,8 +35,9 @@ const corsOptions = {
 // Apply CORS middleware
 app.use(cors(corsOptions));
 
-// Handle preflight requests explicitly
-app.options('*', cors(corsOptions));
+// FIXED: Handle preflight requests with correct route syntax
+// Use '/*' instead of '*' to avoid path-to-regexp error
+app.options('/*', cors(corsOptions));
 
 // Add security headers
 app.use((req, res, next) => {
@@ -52,7 +53,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Request logging middleware (optional but helpful for debugging)
+// Request logging middleware (helpful for debugging)
 app.use((req, res, next) => {
   console.log(`📡 ${req.method} ${req.path} - ${new Date().toISOString()}`);
   next();
