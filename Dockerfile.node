@@ -1,18 +1,11 @@
-# Dockerfile.node
 FROM node:18-slim
-
-# Set working directory
 WORKDIR /app
-
-# Copy package files first for better caching
-COPY backend/package*.json ./
+# Copy ONLY Node-related files
+COPY package*.json ./
 RUN npm ci --only=production
-
-# Copy the entire backend folder
-COPY backend/ .
-
-# Expose the port Render will use
-EXPOSE 10000
-
-# Command to run the Node.js app
-CMD ["node", "server.js"]
+COPY server.js ./
+COPY routes/ ./routes/
+COPY middleware/ ./middleware/
+COPY config/ ./config/
+# Don't copy Python files!
+CMD node server.js

@@ -4,11 +4,9 @@ services:
   - type: web
     name: mediskin-python-api
     runtime: image
-    docker:
-      dockerfilePath: ./Dockerfile.python
-      dockerContext: .
     repo: https://github.com/nelnel19/MediSkin-Backend
     branch: main
+    dockerfilePath: ./Dockerfile.python  # This should be at root level, not under 'docker'
     plan: free
     region: singapore
     envVars:
@@ -26,11 +24,9 @@ services:
   - type: web
     name: mediskin-node-api
     runtime: image
-    docker:
-      dockerfilePath: ./Dockerfile.node
-      dockerContext: .
     repo: https://github.com/nelnel19/MediSkin-Backend
     branch: main
+    dockerfilePath: ./Dockerfile.node  # This should be at root level, not under 'docker'
     plan: free
     region: singapore
     envVars:
