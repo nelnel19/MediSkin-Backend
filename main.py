@@ -9,9 +9,6 @@ import logging
 import tempfile
 from datetime import datetime
 from database import save_skin_analysis_to_history, get_user_skin_history, delete_skin_history_entry  
-import json
-import base64
-import sys
 
 # =========================
 # LOGGING SETUP
@@ -40,143 +37,13 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "models", "skin_disease_mobilenet.keras")
 
 # =========================
-# MODEL LOADING WITH FALLBACKS
-# =========================
-def load_model_with_fallback(model_path):
-    """Try different methods to load the model with compatibility for different TF versions"""
-    
-    logger.info(f"Attempting to load model from: {model_path}")
-    logger.info(f"TensorFlow version: {tf.__version__}")
-    logger.info(f"File exists: {os.path.exists(model_path)}")
-    
-    # Method 1: Standard loading with compile=False
-    try:
-        logger.info("Method 1: Loading with standard load_model...")
-        model = tf.keras.models.load_model(model_path, compile=False)
-        logger.info("✅ Model loaded successfully with Method 1")
-        return model
-    except Exception as e:
-        logger.warning(f"Method 1 failed: {e}")
-    
-    # Method 2: Load with custom objects and safe_mode=False (for TF 2.15+)
-    try:
-        logger.info("Method 2: Loading with safe_mode=False...")
-        model = tf.keras.models.load_model(
-            model_path, 
-            compile=False, 
-            safe_mode=False
-        )
-        logger.info("✅ Model loaded successfully with Method 2")
-        return model
-    except Exception as e:
-        logger.warning(f"Method 2 failed: {e}")
-    
-    # Method 3: Try loading with custom object scope
-    try:
-        logger.info("Method 3: Loading with custom object scope...")
-        from tensorflow.keras.utils import custom_object_scope
-        
-        # Common custom objects that might be needed
-        custom_objects = {
-            'Functional': tf.keras.Model,
-            'InputLayer': tf.keras.layers.InputLayer,
-            'Conv2D': tf.keras.layers.Conv2D,
-            'DepthwiseConv2D': tf.keras.layers.DepthwiseConv2D,
-            'BatchNormalization': tf.keras.layers.BatchNormalization,
-            'ReLU': tf.keras.layers.ReLU,
-            'Add': tf.keras.layers.Add,
-            'ZeroPadding2D': tf.keras.layers.ZeroPadding2D
-        }
-        
-        with custom_object_scope(custom_objects):
-            model = tf.keras.models.load_model(model_path, compile=False)
-        logger.info("✅ Model loaded successfully with Method 3")
-        return model
-    except Exception as e:
-        logger.warning(f"Method 3 failed: {e}")
-    
-    # Method 4: Try loading with weights only approach (if architecture file exists)
-    try:
-        logger.info("Method 4: Attempting to load architecture from JSON...")
-        architecture_path = model_path.replace('.keras', '_architecture.json')
-        weights_path = model_path.replace('.keras', '.h5')
-        
-        if os.path.exists(architecture_path) and os.path.exists(weights_path):
-            with open(architecture_path, 'r') as f:
-                model_json = f.read()
-            model = tf.keras.models.model_from_json(model_json)
-            model.load_weights(weights_path)
-            logger.info("✅ Model loaded successfully with Method 4")
-            return model
-    except Exception as e:
-        logger.warning(f"Method 4 failed: {e}")
-    
-    # Method 5: Try with legacy TF1.x compatibility
-    try:
-        logger.info("Method 5: Loading with legacy TF1.x compatibility...")
-        import tensorflow.compat.v1 as tf1
-        tf1.disable_v2_behavior()
-        model = tf1.keras.models.load_model(model_path)
-        logger.info("✅ Model loaded successfully with Method 5")
-        return model
-    except Exception as e:
-        logger.warning(f"Method 5 failed: {e}")
-    
-    # Method 6: Last resort - try to rebuild model architecture based on config
-    try:
-        logger.info("Method 6: Attempting to rebuild from config...")
-        # Try to load just the config and rebuild
-        import json
-        
-        # Try to read the model file as a zip (keras files are zip archives)
-        import zipfile
-        with zipfile.ZipFile(model_path, 'r') as zip_ref:
-            # Extract config.json
-            if 'config.json' in zip_ref.namelist():
-                with zip_ref.open('config.json') as config_file:
-                    config = json.load(config_file)
-                    
-                    # Rebuild model from config
-                    from tensorflow.keras.models import model_from_json
-                    if 'config' in config:
-                        model = tf.keras.models.model_from_json(json.dumps(config['config']))
-                        
-                    # Try to load weights
-                    if 'model.weights' in zip_ref.namelist():
-                        with tempfile.NamedTemporaryFile(suffix='.h5') as tmp_file:
-                            tmp_file.write(zip_ref.read('model.weights'))
-                            tmp_file.flush()
-                            model.load_weights(tmp_file.name)
-                    
-                    logger.info("✅ Model loaded successfully with Method 6")
-                    return model
-    except Exception as e:
-        logger.warning(f"Method 6 failed: {e}")
-    
-    raise RuntimeError("All model loading methods failed")
-
-# =========================
 # LOAD MODEL
 # =========================
 try:
-    logger.info("=" * 50)
-    logger.info("STARTING MODEL LOADING PROCESS")
-    logger.info("=" * 50)
-    
-    model = load_model_with_fallback(MODEL_PATH)
-    
-    # Test model with random input to verify it works
-    test_input = np.random.rand(1, 224, 224, 3).astype(np.float32)
-    test_output = model.predict(test_input, verbose=0)
-    logger.info(f"✅ Model test successful! Output shape: {test_output.shape}")
-    logger.info(f"✅ Skin disease model loaded successfully")
-    
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
+    logger.info("✅ Skin disease model loaded successfully")
 except Exception as e:
     logger.error(f"❌ Failed to load model: {e}")
-    logger.error("Please check:")
-    logger.error("1. TensorFlow version compatibility")
-    logger.error("2. Model file exists at the specified path")
-    logger.error("3. Model was saved with a compatible format")
     raise RuntimeError(f"Model loading failed: {e}")
 
 # =========================
@@ -864,6 +731,11 @@ async def save_analysis_to_history(
     """
     temp_file_path = None
     try:
+        import json
+        import base64
+        from PIL import Image
+        import io
+        
         # Parse prediction result
         prediction = json.loads(prediction_result)
         
@@ -926,7 +798,6 @@ async def health_check():
     return {
         "status": "healthy", 
         "model": "skin_disease_mobilenet",
-        "tensorflow_version": tf.__version__,
         "thresholds": {
             "low_confidence": LOW_CONFIDENCE_THRESHOLD * 100,
             "high_confidence": HIGH_CONFIDENCE_THRESHOLD * 100
