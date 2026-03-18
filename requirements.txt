@@ -7,4 +7,4 @@ python-multipart==0.0.6
 pymongo==4.5.0
 python-dotenv==1.0.0
 cloudinary==1.36.0
-pydantic==2.4.2a
+pydantic==2.4.2
