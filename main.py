@@ -555,18 +555,18 @@ def predict_single_image(image: Image.Image):
 # =========================
 @app.post("/predict-skin-multi")
 async def predict_skin_multi(
-    files: list[UploadFile] = File(..., description="Upload up to 4 images of skin condition")
+    files: list[UploadFile] = File(..., description="Upload up to 3 images of skin condition")
 ):
     """
-    Analyze multiple images (up to 4) and return aggregated results
+    Analyze multiple images (up to 3) and return aggregated results
     """
     try:
         # Validate number of files
         if not files or len(files) == 0:
             raise HTTPException(status_code=400, detail="At least one image is required")
         
-        if len(files) > 4:  # Changed from 3 to 4
-            raise HTTPException(status_code=400, detail="Maximum 4 images allowed")
+        if len(files) > 3:
+            raise HTTPException(status_code=400, detail="Maximum 3 images allowed")
         
         logger.info(f"Received {len(files)} images for analysis")
         
@@ -945,7 +945,7 @@ async def health_check():
         "diseases_supported": len(DISEASE_DATABASE),
         "history_enabled": True,
         "multi_image_support": True,
-        "max_images": 4
+        "max_images": 3
     }
 
 # =========================
