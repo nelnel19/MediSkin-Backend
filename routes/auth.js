@@ -312,5 +312,100 @@ router.get("/weekly-stats", async (req, res) => {
     });
   }
 });
+
+// Add this to your auth.js routes
+
+// GET MONTHLY USER STATISTICS - REAL DATA FROM DATABASE
+router.get("/monthly-stats", async (req, res) => {
+  try {
+    console.log("📊 MONTHLY STATS API CALLED");
+    
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const startOfYear = new Date(currentYear, 0, 1); // January 1st of current year
+    
+    console.log("Query range:");
+    console.log("Start of year:", startOfYear.toString());
+    console.log("Current date:", now.toString());
+    
+    // Get ALL users created this year
+    const yearUsers = await User.find({
+      createdAt: { 
+        $gte: startOfYear,
+        $lte: now
+      }
+    }, 'createdAt name email').sort({ createdAt: 1 });
+    
+    console.log(`\n📈 USERS CREATED IN ${currentYear}: ${yearUsers.length}`);
+    
+    // Group users by month
+    const monthlyStats = [];
+    let cumulativeUsers = 0;
+    
+    // Get users created before this year
+    const usersBeforeYear = await User.countDocuments({
+      createdAt: { $lt: startOfYear }
+    });
+    cumulativeUsers = usersBeforeYear;
+    
+    console.log(`👥 USERS BEFORE ${currentYear}: ${usersBeforeYear}`);
+    
+    // Loop through all 12 months
+    for (let month = 0; month < 12; month++) {
+      const monthStart = new Date(currentYear, month, 1);
+      const monthEnd = new Date(currentYear, month + 1, 0, 23, 59, 59);
+      
+      // Count users created in this month
+      const monthUsers = yearUsers.filter(user => {
+        const userDate = new Date(user.createdAt);
+        return userDate >= monthStart && userDate <= monthEnd;
+      });
+      
+      const newUsers = monthUsers.length;
+      cumulativeUsers += newUsers;
+      
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      monthlyStats.push({
+        month: monthNames[month],
+        fullMonth: monthNames[month],
+        newUsers: newUsers,
+        cumulativeUsers: cumulativeUsers,
+        monthIndex: month,
+        year: currentYear
+      });
+      
+      console.log(`${monthNames[month]}: ${newUsers} new users (Total: ${cumulativeUsers})`);
+    }
+    
+    // Filter out months with no data at the beginning (optional)
+    const filteredStats = monthlyStats;
+    
+    console.log("\n🎯 FINAL MONTHLY DATA SENT TO FRONTEND:");
+    filteredStats.forEach(stat => {
+      console.log(`${stat.month} ${stat.year}: ${stat.newUsers} new, ${stat.cumulativeUsers} cumulative`);
+    });
+    
+    res.json({ 
+      success: true, 
+      data: filteredStats,
+      debug: {
+        year: currentYear,
+        totalUsersInYear: yearUsers.length,
+        usersBeforeYear: usersBeforeYear,
+        totalUsersOverall: cumulativeUsers
+      }
+    });
+    
+  } catch (err) {
+    console.error("❌ ERROR in monthly-stats:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to fetch monthly statistics",
+      error: err.message
+    });
+  }
+});
+
 export default router;
 
