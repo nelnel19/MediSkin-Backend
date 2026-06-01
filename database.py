@@ -65,6 +65,24 @@ def save_skin_analysis_to_history(user_id, image_path, prediction_result):
         # Log the time being saved
         logger.info(f"Philippines time to save: {ph_time.isoformat()}")
         
+        # FIX: Ensure confidence is properly extracted and is a number
+        confidence_value = 0
+        if "confidence" in prediction_result:
+            confidence_value = prediction_result["confidence"]
+        elif "average_confidence" in prediction_result:
+            confidence_value = prediction_result["average_confidence"]
+        
+        # Convert to float and ensure it's a number
+        try:
+            confidence_value = float(confidence_value)
+        except (ValueError, TypeError):
+            confidence_value = 0
+        
+        # Round to 2 decimal places
+        confidence_value = round(confidence_value, 2)
+        
+        logger.info(f"Saving prediction - Disease: {prediction_result.get('disease')}, Confidence: {confidence_value}")
+        
         # Upload image to Cloudinary with Philippines time in filename
         cloudinary_result = cloudinary.uploader.upload(
             image_path,
@@ -82,10 +100,12 @@ def save_skin_analysis_to_history(user_id, image_path, prediction_result):
             "cloudinary_public_id": cloudinary_result["public_id"],
             "prediction": {
                 "disease": prediction_result.get("disease"),
-                "confidence": prediction_result.get("confidence"),
+                "confidence": confidence_value,  # FIX: Now properly stored as number
                 "description": prediction_result.get("description"),
                 "medication_info": prediction_result.get("medication_info"),
                 "warning": prediction_result.get("warning"),
+                "is_confident": prediction_result.get("is_confident", True),
+                "is_high_confidence": prediction_result.get("is_high_confidence", False),
                 "error": prediction_result.get("error"),
                 "details": prediction_result.get("details")
             },
@@ -132,13 +152,24 @@ def get_user_skin_history(user_id, limit=20):
             # Since created_at is already in Philippines time, we use it directly
             timestamp = int(created_at.timestamp() * 1000)
             
+            # FIX: Ensure confidence is properly formatted for frontend
+            prediction = item["prediction"]
+            if "confidence" not in prediction or prediction["confidence"] is None:
+                prediction["confidence"] = 0
+            
+            # Ensure confidence is a number
+            try:
+                prediction["confidence"] = float(prediction["confidence"])
+            except (ValueError, TypeError):
+                prediction["confidence"] = 0
+            
             # Log the time for debugging
             logger.info(f"Item created_at: {created_at.isoformat()} -> timestamp: {timestamp}")
             
             result.append({
                 "id": str(item["_id"]),
                 "image_url": item["image_url"],
-                "prediction": item["prediction"],
+                "prediction": prediction,
                 "created_at": timestamp,  # Send as timestamp in milliseconds
                 "created_at_iso": created_at.isoformat(),  # Keep ISO for reference
                 "created_at_display": created_at.strftime('%Y-%m-%d %H:%M:%S'),  # Add formatted string for debugging
@@ -191,3 +222,104 @@ def delete_skin_history_entry(history_id):
     except Exception as e:
         logger.error(f"❌ Error deleting history: {e}")
         return {"success": False, "error": str(e)}
+
+def get_all_skin_history_statistics():
+    """
+    Get statistics about all skin history entries across all users
+    Returns counts per disease and total entries
+    """
+    try:
+        logger.info("Fetching all skin history statistics")
+        
+        # Get all documents
+        all_entries = skin_history_collection.find({})
+        
+        # Initialize counters
+        disease_counts = {}
+        total_entries = 0
+        disease_details = []
+        
+        for entry in all_entries:
+            total_entries += 1
+            prediction = entry.get("prediction", {})
+            disease = prediction.get("disease")
+            
+            if disease:
+                if disease not in disease_counts:
+                    disease_counts[disease] = 0
+                disease_counts[disease] += 1
+                
+                # Get the created_at field
+                created_at = entry.get("created_at")
+                
+                # Store detailed info for each entry
+                disease_details.append({
+                    "id": str(entry["_id"]),
+                    "user_id": entry.get("user_id"),
+                    "disease": disease,
+                    "confidence": prediction.get("confidence", 0),
+                    "created_at": created_at.isoformat() if created_at else None,
+                    "created_at_display": created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else None,
+                    "image_url": entry.get("image_url"),
+                    "status": entry.get("status", "completed")
+                })
+        
+        # Convert to list of dictionaries for easier frontend use
+        disease_stats = [
+            {
+                "name": disease,
+                "count": count,
+                "percentage": round((count / total_entries) * 100, 2) if total_entries > 0 else 0
+            }
+            for disease, count in sorted(disease_counts.items(), key=lambda x: x[1], reverse=True)
+        ]
+        
+        logger.info(f"✅ Found {total_entries} total entries across {len(disease_stats)} diseases")
+        
+        return {
+            "total_entries": total_entries,
+            "disease_stats": disease_stats,
+            "all_entries": disease_details
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error fetching statistics: {e}")
+        return {
+            "total_entries": 0,
+            "disease_stats": [],
+            "all_entries": []
+        }
+
+def get_disease_history_by_name(disease_name):
+    """
+    Get all history entries for a specific disease
+    """
+    try:
+        logger.info(f"Fetching history for disease: {disease_name}")
+        
+        entries = skin_history_collection.find({
+            "prediction.disease": disease_name
+        }).sort("created_at", -1)
+        
+        result = []
+        for entry in entries:
+            # Get the created_at field (naive datetime in Philippines time)
+            created_at = entry.get("created_at")
+            
+            result.append({
+                "id": str(entry["_id"]),
+                "user_id": entry.get("user_id"),
+                "image_url": entry.get("image_url"),
+                "confidence": entry.get("prediction", {}).get("confidence", 0),
+                "created_at": created_at.isoformat() if created_at else None,
+                "created_at_display": created_at.strftime('%Y-%m-%d %H:%M:%S') if created_at else None,
+                "status": entry.get("status", "completed"),
+                "timezone": entry.get("timezone", "Asia/Manila")
+            })
+        
+        logger.info(f"✅ Found {len(result)} entries for disease: {disease_name}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ Error fetching disease history: {e}")
+        return []
